@@ -36,6 +36,7 @@ py.arg('--gradient_penalty_weight', type=float, default=10.0)
 py.arg('--cycle_loss_weight', type=float, default=10.0)
 py.arg('--identity_loss_weight', type=float, default=0.0)
 py.arg('--pool_size', type=int, default=50)  # pool size to store fake samples
+py.arg('--n_prefetch_batch', type=int, default=1)
 args = py.args()
 
 # output_dir
@@ -52,14 +53,30 @@ py.args_to_yaml(py.join(output_dir, 'settings.yml'), args)
 
 A_img_paths = py.glob(py.join(args.datasets_dir, 'trainA'), '*.jpg')
 B_img_paths = py.glob(py.join(args.datasets_dir, 'trainB'), '*.jpg')
-A_B_dataset, len_dataset = data.make_zip_dataset(A_img_paths, B_img_paths, args.batch_size, args.load_size, args.crop_size, training=True, repeat=False)
+A_B_dataset, len_dataset = data.make_zip_dataset(
+    A_img_paths, 
+    B_img_paths, 
+    args.batch_size, 
+    args.load_size, 
+    args.crop_size, 
+    training=True, 
+    repeat=False,
+    n_prefetch_batch=args.n_prefetch_batch)
 
 A2B_pool = data.ItemPool(args.pool_size)
 B2A_pool = data.ItemPool(args.pool_size)
 
 A_img_paths_test = py.glob(py.join(args.datasets_dir, 'testA'), '*.jpg')
 B_img_paths_test = py.glob(py.join(args.datasets_dir, 'testB'), '*.jpg')
-A_B_dataset_test, _ = data.make_zip_dataset(A_img_paths_test, B_img_paths_test, args.batch_size, args.load_size, args.crop_size, training=False, repeat=True)
+A_B_dataset_test, _ = data.make_zip_dataset(
+    A_img_paths_test, 
+    B_img_paths_test, 
+    args.batch_size, 
+    args.load_size, 
+    args.crop_size, 
+    training=False, 
+    repeat=True,
+    n_prefetch_batch=args.n_prefetch_batch)
 
 
 # ==============================================================================
