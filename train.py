@@ -1,3 +1,4 @@
+import os
 import functools
 
 import imlib as im
@@ -37,6 +38,7 @@ py.arg('--cycle_loss_weight', type=float, default=10.0)
 py.arg('--identity_loss_weight', type=float, default=0.0)
 py.arg('--pool_size', type=int, default=50)  # pool size to store fake samples
 py.arg('--n_prefetch_batch', type=int, default=1)
+py.arg('--checkpoint_iterations', type=int, default=100)
 args = py.args()
 
 # output_dir
@@ -198,6 +200,7 @@ def sample(A, B):
 ep_cnt = tf.Variable(initial_value=0, trainable=False, dtype=tf.int64)
 
 # checkpoint
+checkpoint_dir = os.path.join(output_dir, 'checkpoints')
 checkpoint = tl.Checkpoint(dict(G_A2B=G_A2B,
                                 G_B2A=G_B2A,
                                 D_A=D_A,
@@ -205,10 +208,16 @@ checkpoint = tl.Checkpoint(dict(G_A2B=G_A2B,
                                 G_optimizer=G_optimizer,
                                 D_optimizer=D_optimizer,
                                 ep_cnt=ep_cnt),
-                           py.join(output_dir, 'checkpoints'),
+                           checkpoint_dir,
                            max_to_keep=5)
 try:  # restore checkpoint including the epoch counter
-    checkpoint.restore().assert_existing_objects_matched()
+    latest_checkpt = tf.train.latest_checkpoint(checkpoint_dir)
+    if latest_checkpt is not None:
+        print('Latest checkpoint found: {}. Attempting to restore...'.format(
+            latest_checkpt))
+    else:
+        print('No checkpoint found. Beginning from scratch.')
+    checkpoint.restore(latest_checkpt).assert_existing_objects_matched()
 except Exception as e:
     print(e)
 
@@ -223,11 +232,9 @@ py.mkdir(sample_dir)
 # main loop
 with train_summary_writer.as_default():
     for ep in tqdm.trange(args.epochs, desc='Epoch Loop'):
+        # if restoring, skip to current epoch
         if ep < ep_cnt:
             continue
-
-        # update epoch counter
-        ep_cnt.assign_add(1)
 
         # train for an epoch
         for A, B in tqdm.tqdm(A_B_dataset, desc='Inner Epoch Loop', total=len_dataset):
@@ -239,11 +246,17 @@ with train_summary_writer.as_default():
             tl.summary({'learning rate': G_lr_scheduler.current_learning_rate}, step=G_optimizer.iterations, name='learning rate')
 
             # sample
-            if G_optimizer.iterations.numpy() % 100 == 0:
+            optim_iterations = G_optimizer.iterations.numpy()
+            if optim_iterations % args.checkpoint_iterations == 0:
                 A, B = next(test_iter)
                 A2B, B2A, A2B2A, B2A2B = sample(A, B)
                 img = im.immerge(np.concatenate([A, A2B, A2B2A, B, B2A, B2A2B], axis=0), n_rows=2)
-                im.imwrite(img, py.join(sample_dir, 'iter-%09d.jpg' % G_optimizer.iterations.numpy()))
+                im.imwrite(img, py.join(sample_dir, 'iter-%09d.jpg' % optim_iterations))
 
-        # save checkpoint
-        checkpoint.save(ep)
+                # save checkpoint
+                file_prefix = os.path.join(checkpoint_dir, 
+                    'ep{}-step{}'.format(ep, optim_iterations))
+                checkpoint.save(file_prefix)
+
+        # update epoch counter
+        ep_cnt.assign_add(1)
