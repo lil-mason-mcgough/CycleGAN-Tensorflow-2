@@ -39,6 +39,11 @@ py.arg('--identity_loss_weight', type=float, default=0.0)
 py.arg('--pool_size', type=int, default=50)  # pool size to store fake samples
 py.arg('--n_prefetch_batch', type=int, default=1)
 py.arg('--checkpoint_iterations', type=int, default=100)
+py.arg('--G_n_downsamplings', type=int, default=2)
+py.arg('--G_n_residual_blocks', type=int, default=9)
+py.arg('--G_n_filters', type=int, default=64)
+py.arg('--D_n_downsamplings', type=int, default=3)
+py.arg('--D_n_filters', type=int, default=64)
 args = py.args()
 
 # output_dir
@@ -86,13 +91,23 @@ A_B_dataset_test, _ = data.make_zip_dataset(
 # ==============================================================================
 
 G_A2B = module.ResnetGenerator(input_shape=(args.crop_size, args.crop_size, 3),
+    n_downsamplings=args.G_n_downsamplings,
+    n_blocks=args.G_n_residual_blocks,
+    dim=args.G_n_filters,
     norm=args.norm_type)
 G_B2A = module.ResnetGenerator(input_shape=(args.crop_size, args.crop_size, 3),
+    n_downsamplings=args.G_n_downsamplings,
+    n_blocks=args.G_n_residual_blocks,
+    dim=args.G_n_filters,
     norm=args.norm_type)
 
 D_A = module.ConvDiscriminator(input_shape=(args.crop_size, args.crop_size, 3),
+    n_downsamplings=args.D_n_downsamplings,
+    dim=args.D_n_filters,
     norm=args.norm_type)
 D_B = module.ConvDiscriminator(input_shape=(args.crop_size, args.crop_size, 3),
+    n_downsamplings=args.D_n_downsamplings,
+    dim=args.D_n_filters,
     norm=args.norm_type)
 
 d_loss_fn, g_loss_fn = gan.get_adversarial_losses_fn(args.adversarial_loss_mode)
